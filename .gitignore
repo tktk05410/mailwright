@@ -1,0 +1,11 @@
+.env
+data/index/
+data/styles/imported.json
+data/handbook/*
+!data/handbook/员工手册示例.md
+__pycache__/
+.pytest_cache/
+.venv/
+.idea/
+*.log
+assets/fonts/SmileySans-Oblique.ttf

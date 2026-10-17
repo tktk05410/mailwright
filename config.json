@@ -1,0 +1,17 @@
+{
+  "blocklist": [
+    "promo@spam.example.com"
+  ],
+  "rules": [
+    "不得在邮件中承诺具体交付时间与金额",
+    "回复保持简洁礼貌，长度不超过 200 字",
+    "催办类邮件先致歉再说明进展"
+  ],
+  "handbook_disabled": [],
+  "theme": "light",
+  "temperature": 0.3,
+  "max_tokens": 1024,
+  "top_k": 5,
+  "min_cos": 0.45,
+  "min_rrf": 0.01
+}

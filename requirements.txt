@@ -1,0 +1,11 @@
+flet==1.0.4
+jieba>=0.42
+rank-bm25>=0.2
+numpy>=1.26,<3
+beautifulsoup4>=4.12
+pyperclip>=1.8
+openai>=1.40,<3
+pywin32>=306; sys_platform == "win32"
+sentence-transformers>=3,<7
+PyMuPDF>=1.24
+python-docx>=1.1
