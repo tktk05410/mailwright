@@ -1,21 +1,26 @@
+"""手册切块：按标题分层并保留条款号。"""
+
 import re
 
 from core.models import Chunk
 
-MD_HEAD = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
-NUM_HEAD = re.compile(r"^(\d+(?:\.\d+)*)[\.、]?\s+(\S.*)$")
-CLAUSE = re.compile(r"\d+(?:\.\d+)+")
+MD_HEAD = re.compile(r"^(#{1,6})\s+(.+?)\s*$")  # Markdown 标题
+NUM_HEAD = re.compile(r"^(\d+(?:\.\d+)*)[\.、]?\s+(\S.*)$")  # 编号标题
+CLAUSE = re.compile(r"\d+(?:\.\d+)+")  # 提取条款号
 END_PUNCT = ("。", "！", "？", "，", "；", "：")
-SENT_SPLIT = re.compile(r"(?<=[。！？；])")
-SPLIT_OVERLAP = 50
+SENT_SPLIT = re.compile(r"(?<=[。！？；])")  # 按句切分
+SPLIT_OVERLAP = 50  # 重叠 50 字
+PREAMBLE = "前言"
 
 
 def _split_sentence(text, limit):
+    """按句切分并留重叠。"""
     parts, buf = [], ""
     for sent in SENT_SPLIT.split(text):
         sent = sent.strip()
         if not sent:
             continue
+        # 超长单句硬切
         while len(sent) > limit:
             if buf:
                 parts.append(buf)
@@ -33,6 +38,7 @@ def _split_sentence(text, limit):
 
 
 def _split_long(text, limit=500):
+    """按空行分段并限长。"""
     if len(text) <= limit:
         return [text]
     parts, buf = [], ""
@@ -54,11 +60,15 @@ def _split_long(text, limit=500):
 
 
 def chunk_handbook(text, doc="员工手册"):
-    stack, blocks, cur, path = [], [], [], "前言"
+    """切成带章节路径的块。"""
+    stack, blocks, cur, path = [], [], [], PREAMBLE
+
+    # 第一遍：按标题分组
     for line in text.splitlines():
         md = MD_HEAD.match(line)
         num = None
         stripped = line.strip()
+        # 排除正文句子
         if md is None and len(stripped) < 50 and not stripped.endswith(END_PUNCT):
             num = NUM_HEAD.match(stripped)
         if md or num:
@@ -69,6 +79,7 @@ def chunk_handbook(text, doc="员工手册"):
             else:
                 level = 1 + num.group(1).count(".")
                 title = f"{num.group(1)} {num.group(2).strip()}"
+            # 维护标题层级栈
             stack = [s for s in stack if s[0] < level]
             stack.append((level, title))
             path = "/".join(t for _, t in stack)
@@ -78,23 +89,29 @@ def chunk_handbook(text, doc="员工手册"):
     if cur:
         blocks.append({"path": path, "lines": cur})
 
+    # 第二遍：切分并编号
     chunks, seq = [], 0
+    safe_doc = re.sub(r"[^\w\u4e00-\u9fa5-]", "_", doc or "doc")
     for b in blocks:
         body = "\n".join(b["lines"]).strip()
         if not body:
             continue
         m = CLAUSE.search(b["path"])
         clause = m.group(0) if m else ""
-        safe_doc = re.sub(r"[^\w\u4e00-\u9fa5-]", "_", doc or "doc")
         for i, part in enumerate(_split_long(body), 1):
             seq += 1
-            no = clause or str(seq)
+            # 无条款号用序号
+            key = clause or f"s{seq}"
             chunks.append(
                 Chunk(
-                    chunk_id=f"hb_{safe_doc}_{no}_{i}",
+                    chunk_id=f"hb_{safe_doc}_{key}_{i}",
                     text=part,
                     kind="handbook",
-                    metadata={"doc": doc, "section_path": b["path"], "clause_no": no},
+                    metadata={
+                        "doc": doc,
+                        "section_path": b["path"],
+                        "clause_no": clause,
+                    },
                 )
             )
     return chunks

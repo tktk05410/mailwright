@@ -1,3 +1,5 @@
+"""LLM 客户端，在线优先、失败降级。"""
+
 import json
 import os
 import re
@@ -7,12 +9,14 @@ from urllib.parse import urlparse
 
 from agent.prompts import CLASSIFY_SYSTEM, LABELS, build_draft_messages
 
+# 默认服务与重试参数
 DEFAULT_BASE_URL = "https://api.deepseek.com"
 DEFAULT_MODEL = "deepseek-chat"
 TIMEOUT = 30.0
 RETRY_TIMES = 3
 CONFIG_PATH = Path(__file__).parent.parent / "config.json"
 
+# 域名映射平台名
 _PLATFORMS = [
     ("deepseek", "DeepSeek"),
     ("openai", "OpenAI"),
@@ -26,6 +30,7 @@ _PLATFORMS = [
 
 
 def _gen_params():
+    """读一次生成参数。"""
     try:
         cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     except Exception:
@@ -37,6 +42,7 @@ def _gen_params():
 
 
 def _platform_name(base_url):
+    """域名转平台名。"""
     host = urlparse(base_url).netloc or base_url
     for key, name in _PLATFORMS:
         if key in host:
@@ -45,6 +51,7 @@ def _platform_name(base_url):
 
 
 def _extract_json(text):
+    """容错提取 JSON。"""
     text = (text or "").strip()
     for cand in (
         text,
@@ -66,6 +73,8 @@ def _extract_json(text):
 
 
 class ChatLLM:
+    """LLM 统一入口。"""
+
     def __init__(self):
         key = os.getenv("LLM_API_KEY", "").strip()
         base_url = os.getenv("LLM_BASE_URL", "").strip() or DEFAULT_BASE_URL
@@ -74,18 +83,22 @@ class ChatLLM:
         self._client = None
         self.last_error = ""
         if key:
+            # 无 Key 则走离线 mock
             from openai import OpenAI
             self._client = OpenAI(api_key=key, base_url=base_url, timeout=TIMEOUT)
 
     @property
     def online(self):
+        """是否在线可用。"""
         return self._client is not None
 
     @property
     def mode(self):
+        """状态栏文案。"""
         return f"{self.platform} 在线" if self._client else "离线演示"
 
     def ping(self):
+        """测试连通性。"""
         if self._client is None:
             raise RuntimeError("未配置 API Key")
         self._client.chat.completions.create(
@@ -96,6 +109,7 @@ class ChatLLM:
         )
 
     def _chat(self, system, user):
+        """调用对话接口。"""
         params = _gen_params()
         last = None
         for attempt in range(RETRY_TIMES):
@@ -113,10 +127,11 @@ class ChatLLM:
             except Exception as ex:
                 last = ex
                 if attempt < RETRY_TIMES - 1:
-                    time.sleep(1.0 + attempt)
+                    time.sleep(1.0 + attempt)  # 简单退避
         raise last
 
     def classify(self, email_text):
+        """分类并生成摘要。"""
         if self._client is None:
             return mock_classify(email_text)
         try:
@@ -127,10 +142,12 @@ class ChatLLM:
         if not isinstance(out.get("labels"), list):
             self.last_error = "在线分类返回格式异常，已降级"
             return mock_classify(email_text)
+        # 只保留白名单标签
         out["labels"] = [x for x in out["labels"] if x in LABELS] or ["其他"]
         return out
 
     def draft(self, email_text, clauses, styles, rules):
+        """生成回复草稿。"""
         if self._client is None:
             return mock_draft(email_text, clauses)
         try:
@@ -141,11 +158,13 @@ class ChatLLM:
         if not str(out.get("draft", "")).strip():
             self.last_error = "在线草稿为空，已降级"
             return mock_draft(email_text, clauses)
+        # 条款号转字符串
         cited = out.get("cited_clauses")
         out["cited_clauses"] = [str(n) for n in cited] if isinstance(cited, list) else []
         return out
 
 
+# 离线关键词规则
 _CLASSIFY_RULES = [
     ("客户询价", ("报价", "价格", "采购", "quote")),
     ("催办", ("催", "进度", "跟进", "何时")),
@@ -155,6 +174,7 @@ _CLASSIFY_RULES = [
 
 
 def mock_classify(email_text):
+    """按关键词离线分类。"""
     labels = [name for name, words in _CLASSIFY_RULES if any(w in email_text for w in words)]
     if not labels:
         labels = ["其他"]
@@ -164,6 +184,7 @@ def mock_classify(email_text):
 
 
 def mock_draft(email_text, clauses):
+    """按关键词离线起草。"""
     if any(w in email_text for w in ("报价", "价格", "采购")):
         body = "关于您咨询的报价事宜，我们需按内部审批流程确认后另行回复，暂无法在邮件中给出具体金额。"
     elif any(w in email_text for w in ("交付", "时间", "进度", "上线")):

@@ -1,7 +1,4 @@
 {
-  "blocklist": [
-    "promo@spam.example.com"
-  ],
   "rules": [
     "不得在邮件中承诺具体交付时间与金额",
     "回复保持简洁礼貌，长度不超过 200 字",
@@ -12,6 +9,8 @@
   "temperature": 0.3,
   "max_tokens": 1024,
   "top_k": 5,
-  "min_cos": 0.45,
-  "min_rrf": 0.01
+  "min_cos": 0.48,
+  "min_cos_hash": 0.1,
+  "min_rrf": 0.02,
+  "vector_fallback": true
 }

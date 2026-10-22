@@ -1,3 +1,5 @@
+"""剪贴板文本当作一封邮件。"""
+
 import uuid
 from datetime import datetime
 
@@ -8,12 +10,15 @@ from preprocess.clean import clean_email
 
 
 class ClipboardAdapter:
+
     name = "clipboard"
 
     def current(self) -> Message:
         raw = (pyperclip.paste() or "").strip()
         if not raw:
             raise RuntimeError("剪贴板为空，请先复制邮件正文")
+
+        # 去掉邮件头、引用与签名
         body = clean_email(raw)
         subject = body.splitlines()[0][:30] if body else ""
         return Message(
