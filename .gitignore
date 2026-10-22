@@ -8,4 +8,6 @@ __pycache__/
 .venv/
 .idea/
 *.log
+jieba.cache
+torchinductor_*/
 assets/fonts/SmileySans-Oblique.ttf
